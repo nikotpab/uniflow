@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Artefactos de deploy
+*.zip
+response.json
+out.json
+
+# Sistema
+.DS_Store
+
+# Credenciales locales (nunca deben existir aquí, pero por si acaso)
+*.pem
+client_secret*.json
+token*.json
+.env

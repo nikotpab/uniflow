@@ -1,0 +1,11 @@
+# Las siguientes librerías ya están incluidas en el runtime de Lambda Python 3.12:
+# - boto3
+# - json
+# - urllib
+# - re
+# - uuid
+# - datetime
+# No se necesitan dependencias externas adicionales para email_scanner.
+# Si en el futuro se necesitan, agregarlas aquí:
+# google-auth==2.29.0
+# google-auth-oauthlib==1.2.0
