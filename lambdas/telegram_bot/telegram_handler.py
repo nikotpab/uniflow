@@ -46,14 +46,18 @@ def _get_ssm(name: str) -> str:
 
 
 def _get_ssm_optional(name: str) -> str | None:
-    """Como _get_ssm pero devuelve None si el parámetro no existe."""
-    if name in _ssm_cache:
+    """
+    Como _get_ssm pero devuelve None si el parámetro no existe.
+    La ausencia NO se cachea: el parámetro puede crearse después de que el
+    contenedor de la Lambda ya esté caliente (p. ej. activar el allowlist).
+    """
+    if _ssm_cache.get(name) is not None:
         return _ssm_cache[name]
     ssm = boto3.client("ssm", region_name=AWS_REGION)
     try:
         value = ssm.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
     except ssm.exceptions.ParameterNotFound:
-        value = None
+        return None
     _ssm_cache[name] = value
     return value
 

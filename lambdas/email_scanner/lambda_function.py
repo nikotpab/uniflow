@@ -2,11 +2,11 @@
 lambda_function.py — Email Scanner
 ====================================
 Handler principal de la Lambda que:
-1. Lee emails no leídos de nikoo.barbosa@gmail.com
-2. Extrae tareas con Bedrock Nova Lite
-3. Guarda en DynamoDB (sin duplicados)
-4. Crea eventos en Google Calendar
-5. Marca emails como leídos
+1. Lee emails no leídos de nikoo.barbosa@gmail.com (Gmail solo-lectura)
+2. Salta los que ya tienen marcador de procesado en DynamoDB
+3. Extrae tareas con Bedrock Nova Lite
+4. Guarda en DynamoDB (sin duplicados) y crea eventos en Google Calendar
+5. Registra marcador de email procesado
 
 Trigger: EventBridge cada 2 horas
 """
@@ -15,9 +15,14 @@ import json
 import traceback
 import boto3
 
-from gmail_client import get_unread_emails_from_sender, mark_email_as_read
+from gmail_client import get_unread_emails_from_sender
 from bedrock_extractor import extract_tasks_from_email
-from dynamo_client import save_task, update_calendar_event_id
+from dynamo_client import (
+    save_task,
+    update_calendar_event_id,
+    is_email_processed,
+    save_processed_email_marker,
+)
 from calendar_client import create_event_from_task
 
 
@@ -43,6 +48,7 @@ def handler(event, context):
 
     stats = {
         "emails_processed": 0,
+        "emails_skipped": 0,
         "tasks_extracted": 0,
         "tasks_saved": 0,
         "calendar_events_created": 0,
@@ -67,14 +73,21 @@ def handler(event, context):
             print(f"\n[EmailScanner] Email: {email['subject'][:60]}")
 
             try:
+                # El scope de Gmail es solo-lectura: no podemos marcar como
+                # leído, así que saltamos emails ya registrados en DynamoDB.
+                if is_email_processed(email_id):
+                    print(f"[EmailScanner] Email ya procesado, se omite: {email_id}")
+                    stats["emails_skipped"] += 1
+                    continue
+
                 # Extraer tareas con Bedrock
                 tasks = extract_tasks_from_email(email)
                 stats["emails_processed"] += 1
                 stats["tasks_extracted"] += len(tasks)
 
                 if not tasks:
-                    print(f"[EmailScanner] Sin tareas en este email, marcando como leído")
-                    mark_email_as_read(email_id)
+                    print(f"[EmailScanner] Sin tareas en este email")
+                    save_processed_email_marker(email_id, email.get("subject", ""))
                     continue
 
                 # Guardar tareas y crear eventos de calendario
@@ -101,8 +114,8 @@ def handler(event, context):
                         print(f"[EmailScanner] ❌ {error_msg}")
                         stats["errors"].append(error_msg)
 
-                # Marcar email como leído solo si se procesó correctamente
-                mark_email_as_read(email_id)
+                # Registrar el email como procesado para no repetirlo
+                save_processed_email_marker(email_id, email.get("subject", ""))
 
             except Exception as email_err:
                 error_msg = f"Error procesando email {email_id}: {email_err}"

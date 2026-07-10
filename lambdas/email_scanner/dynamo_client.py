@@ -173,3 +173,36 @@ def get_task_by_id(task_id: str) -> dict | None:
     table = _table()
     response = table.get_item(Key={"task_id": task_id})
     return response.get("Item")
+
+
+# ─── Marcadores de emails procesados ──────────────────────────────────────────
+# El scope de Gmail es solo-lectura, así que no podemos marcar emails como
+# leídos. En su lugar, cada email procesado deja un marcador en la tabla.
+# Los marcadores usan status="processed_email", por lo que nunca aparecen en
+# el GSI de tareas pendientes (status="pending").
+
+def is_email_processed(email_id: str) -> bool:
+    """True si este email ya fue procesado (tiene marcador o tareas guardadas)."""
+    if not email_id:
+        return False
+    table = _table()
+    kwargs = {"FilterExpression": Attr("email_id").eq(email_id)}
+    response = table.scan(**kwargs)
+    while not response.get("Items") and "LastEvaluatedKey" in response:
+        response = table.scan(**kwargs, ExclusiveStartKey=response["LastEvaluatedKey"])
+    return bool(response.get("Items"))
+
+
+def save_processed_email_marker(email_id: str, email_subject: str = "") -> None:
+    """Registra que un email ya fue procesado (aunque no tuviera tareas)."""
+    table = _table()
+    now = datetime.now(timezone.utc).isoformat()
+    table.put_item(Item={
+        "task_id": f"email-marker-{email_id}",
+        "email_id": email_id,
+        "email_subject": email_subject,
+        "status": "processed_email",
+        "due_date": "0000-01-01T00:00:00",
+        "created_at": now,
+        "updated_at": now,
+    })

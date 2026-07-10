@@ -121,6 +121,28 @@ class TestFormatoTareas(unittest.TestCase):
         self.assertIn("VENCIDA", handler._format_task(task))
 
 
+class TestSsmOptionalNoCacheaAusencia(unittest.TestCase):
+    """El parámetro puede crearse con la Lambda caliente: None no se cachea."""
+
+    def test_relee_parametro_creado_despues(self):
+        class FakeNotFound(Exception):
+            pass
+
+        client = MagicMock()
+        client.exceptions.ParameterNotFound = FakeNotFound
+        client.get_parameter.side_effect = [
+            FakeNotFound(),
+            {"Parameter": {"Value": "6554994887"}},
+        ]
+
+        with patch.object(handler, "boto3") as fake_boto3:
+            fake_boto3.client.return_value = client
+            handler._ssm_cache.pop("/uniflow/test/param", None)
+            self.assertIsNone(handler._get_ssm_optional("/uniflow/test/param"))
+            # Segunda llamada: el parámetro ya existe y debe encontrarse
+            self.assertEqual(handler._get_ssm_optional("/uniflow/test/param"), "6554994887")
+
+
 class TestWebhookSecret(unittest.TestCase):
     def test_sin_secreto_configurado_permite(self):
         with patch.object(bot_lambda, "_get_ssm_optional", return_value=None):

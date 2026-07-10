@@ -121,7 +121,6 @@ def _decode_body(payload: dict) -> str:
 def get_unread_emails_from_sender(
     sender_email: str,
     max_results: int = 20,
-    mark_as_read: bool = False,
 ) -> list[dict]:
     """
     Devuelve lista de emails no leídos del remitente especificado.
@@ -186,17 +185,6 @@ def get_unread_emails_from_sender(
     return emails
 
 
-def mark_email_as_read(email_id: str) -> None:
-    """Marca un email como leído removiendo el label UNREAD."""
-    access_token = _get_access_token()
-    user_email = _get_ssm("/uniflow/config/user_email")
-
-    data = json.dumps({"removeLabelIds": ["UNREAD"]}).encode()
-    url = f"{GMAIL_API_BASE}/users/{user_email}/messages/{email_id}/modify"
-
-    req = urllib.request.Request(url, data=data, method="POST")
-    req.add_header("Authorization", f"Bearer {access_token}")
-    req.add_header("Content-Type", "application/json")
-
-    with urllib.request.urlopen(req):
-        pass
+# Nota: no existe mark_email_as_read a propósito. El scope OAuth es
+# gmail.readonly (modificar labels devuelve 403). Los emails ya procesados
+# se rastrean con marcadores en DynamoDB (ver dynamo_client.is_email_processed).
