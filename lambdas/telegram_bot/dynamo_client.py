@@ -6,6 +6,7 @@ CRUD de tareas en DynamoDB para la Lambda del bot de Telegram.
 para que cada Lambda sea un paquete de despliegue independiente.)
 """
 
+import re
 import uuid
 import boto3
 from datetime import datetime, timezone, timedelta
@@ -89,6 +90,18 @@ def mark_task_completed(task_id: str) -> bool:
 
 
 def find_task_by_partial_name(name: str) -> dict | None:
-    """Busca la primera tarea pendiente cuyo subject contenga el nombre dado."""
+    """
+    Busca la primera tarea pendiente cuyo subject contenga el nombre dado.
+    También acepta el ID corto (prefijo hex del task_id) que muestra el bot.
+    Si el ID no coincide con nada, se cae al buscador por nombre.
+    """
+    query = name.strip().lower()
+
+    # ¿Parece un ID corto? (prefijo de un uuid: solo hex y guiones, ≥6 chars)
+    if re.fullmatch(r"[0-9a-f][0-9a-f-]{5,}", query):
+        for task in get_pending_tasks():
+            if task.get("task_id", "").lower().startswith(query):
+                return task
+
     results = search_tasks(name)
     return results[0] if results else None

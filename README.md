@@ -34,7 +34,7 @@ Estimated running cost: $0/month at personal volume (AWS Free Tier; Bedrock usag
 | `/hoy` | Tasks due today |
 | `/semana` | Tasks due in the next 7 days |
 | `/tareas` | All pending tasks |
-| `/completar [name]` | Mark a task as completed |
+| `/completar [name or id]` | Mark a task as completed and delete its calendar event |
 | `/buscar [text]` | Search by task name or course |
 | Free text | AI chat about your tasks |
 
@@ -122,7 +122,7 @@ Then send `/start` to your bot on Telegram.
 python3 -m unittest discover -s tests -v
 ```
 
-42 unit tests covering Bedrock response parsing, deduplication, timezone windows, webhook validation and bot command dispatch. They inject a fake `boto3`, so they run without AWS credentials or any dependencies installed.
+48 unit tests covering Bedrock response parsing, deduplication, timezone windows, webhook validation and bot command dispatch. They inject a fake `boto3`, so they run without AWS credentials or any dependencies installed.
 
 ## Security
 

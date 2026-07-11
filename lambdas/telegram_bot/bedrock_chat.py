@@ -33,6 +33,8 @@ Instrucciones:
 - Si no hay tareas relevantes para la pregunta, dilo claramente
 - Máximo 300 palabras por respuesta
 - Si el estudiante dice que completó una tarea, indícale que use /completar [nombre]
+- NUNCA afirmes que ya actualizaste, completaste o eliminaste una tarea: tú no \
+puedes modificar la lista, solo el comando /completar lo hace
 
 Mensaje del estudiante: {user_message}"""
 

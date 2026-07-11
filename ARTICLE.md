@@ -46,7 +46,7 @@ The most interesting part was the bugs I found while hardening it:
 - **Read-only means read-only.** The scanner originally marked emails as read after processing — which returned `403 Forbidden`, because I had deliberately requested only the read-only Gmail scope. Instead of widening the scope, processed emails now leave marker items in DynamoDB, which makes the scanner fully idempotent with zero write access to the inbox.
 - **Webhook security.** Anyone who discovers the API Gateway URL could post fake Telegram updates. The deploy script generates a random secret, registers it with Telegram's `setWebhook`, and the Lambda validates the secret header on every request — plus a chat-ID allowlist, since this is a personal assistant.
 
-I also wrote 42 unit tests that run without AWS or even boto3 installed (they inject a fake one), covering Bedrock response parsing, deduplication, timezone windows and bot command dispatch.
+I also wrote 48 unit tests that run without AWS or even boto3 installed (they inject a fake one), covering Bedrock response parsing, deduplication, timezone windows and bot command dispatch.
 
 ## AWS Services Used / Architecture Overview
 

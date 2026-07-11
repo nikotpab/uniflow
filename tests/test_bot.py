@@ -10,10 +10,12 @@ from unittest.mock import MagicMock, patch
 from _helpers import install_fake_boto3, load_module
 
 install_fake_boto3()
-# Orden importa: telegram_handler hace `from dynamo_client import ...`
-# y `from bedrock_chat import ...`, así que esos aliases deben existir antes.
-load_module("dynamo_client", "lambdas/telegram_bot/dynamo_client.py")
+# Orden importa: telegram_handler hace `from dynamo_client import ...`,
+# `from bedrock_chat import ...` y `from calendar_client import ...`,
+# así que esos aliases deben existir antes.
+dynamo = load_module("dynamo_client", "lambdas/telegram_bot/dynamo_client.py")
 load_module("bedrock_chat", "lambdas/telegram_bot/bedrock_chat.py")
+load_module("calendar_client", "lambdas/telegram_bot/calendar_client.py")
 handler = load_module("telegram_handler", "lambdas/telegram_bot/telegram_handler.py")
 bot_lambda = load_module("bot_lambda", "lambdas/telegram_bot/lambda_function.py")
 
@@ -68,6 +70,89 @@ class TestDispatchComandos(unittest.TestCase):
     def test_completar_sin_argumentos_pide_formato(self):
         handler.process_message(_msg("/completar"))
         self.assertIn("/completar", self._sent_text())
+
+
+class TestCompletar(unittest.TestCase):
+    """Completar una tarea debe eliminar su evento de Google Calendar."""
+
+    TASK = {
+        "task_id": "284cd52f-1111-2222-3333-444455556666",
+        "subject": "Taller de integrales dobles",
+        "course": "Cálculo III",
+        "calendar_event_id": "evt_abc123",
+    }
+
+    def setUp(self):
+        self._patches = [
+            patch.object(handler, "send_message"),
+            patch.object(handler, "_get_ssm_optional", return_value=None),
+        ]
+        self.send = self._patches[0].start()
+        self._patches[1].start()
+
+    def tearDown(self):
+        for p in self._patches:
+            p.stop()
+
+    def _sent_text(self) -> str:
+        return self.send.call_args.args[1]
+
+    def test_completar_elimina_evento_del_calendario(self):
+        with patch.object(handler, "find_task_by_partial_name", return_value=dict(self.TASK)), \
+             patch.object(handler, "mark_task_completed", return_value=True), \
+             patch.object(handler, "delete_event") as delete:
+            handler.process_message(_msg("/completar taller"))
+        delete.assert_called_once_with("evt_abc123")
+        text = self._sent_text().lower()
+        self.assertIn("completada", text)
+        self.assertIn("eliminado", text)
+
+    def test_completar_sin_evento_no_llama_calendario(self):
+        task = dict(self.TASK, calendar_event_id="")
+        with patch.object(handler, "find_task_by_partial_name", return_value=task), \
+             patch.object(handler, "mark_task_completed", return_value=True), \
+             patch.object(handler, "delete_event") as delete:
+            handler.process_message(_msg("/completar taller"))
+        delete.assert_not_called()
+        self.assertIn("completada", self._sent_text().lower())
+
+    def test_fallo_de_calendario_no_rompe_completar(self):
+        with patch.object(handler, "find_task_by_partial_name", return_value=dict(self.TASK)), \
+             patch.object(handler, "mark_task_completed", return_value=True), \
+             patch.object(handler, "delete_event", side_effect=RuntimeError("boom")):
+            handler.process_message(_msg("/completar taller"))
+        text = self._sent_text().lower()
+        self.assertIn("completada", text)
+        self.assertIn("no se pudo eliminar", text)
+
+    def test_tarea_no_completada_no_toca_calendario(self):
+        with patch.object(handler, "find_task_by_partial_name", return_value=dict(self.TASK)), \
+             patch.object(handler, "mark_task_completed", return_value=False), \
+             patch.object(handler, "delete_event") as delete:
+            handler.process_message(_msg("/completar taller"))
+        delete.assert_not_called()
+        self.assertIn("no se pudo completar", self._sent_text().lower())
+
+
+class TestBuscarPorIdCorto(unittest.TestCase):
+    """El ID corto que muestra el bot debe servir en /completar."""
+
+    TASKS = [
+        {"task_id": "367556ae-aaaa-bbbb-cccc-ddddeeeeffff",
+         "subject": "Quiz ondas", "course": "Física II", "description": ""},
+        {"task_id": "284cd52f-1111-2222-3333-444455556666",
+         "subject": "Taller integrales", "course": "Cálculo III", "description": ""},
+    ]
+
+    def test_encuentra_por_id_corto(self):
+        with patch.object(dynamo, "get_pending_tasks", return_value=list(self.TASKS)):
+            task = dynamo.find_task_by_partial_name("284cd52f")
+        self.assertEqual(task["subject"], "Taller integrales")
+
+    def test_nombre_sigue_funcionando(self):
+        with patch.object(dynamo, "get_pending_tasks", return_value=list(self.TASKS)):
+            task = dynamo.find_task_by_partial_name("quiz")
+        self.assertEqual(task["subject"], "Quiz ondas")
 
 
 class TestAllowlist(unittest.TestCase):

@@ -22,6 +22,7 @@ from dynamo_client import (
     find_task_by_partial_name,
 )
 from bedrock_chat import generate_response
+from calendar_client import delete_event
 
 
 AWS_REGION = "us-east-1"
@@ -189,15 +190,29 @@ def _cmd_completar(chat_id: int, args: str) -> None:
         return
 
     success = mark_task_completed(task["task_id"])
-    if success:
-        send_message(
-            chat_id,
-            f"✅ <b>¡Tarea completada!</b>\n\n"
-            f"📚 {html.escape(task.get('subject', ''))}\n"
-            f"📖 {html.escape(task.get('course', ''))}",
-        )
-    else:
+    if not success:
         send_message(chat_id, "❌ No se pudo completar la tarea. Intenta de nuevo.")
+        return
+
+    # La tarea completada ya no debe estorbar en el calendario
+    calendar_note = ""
+    event_id = task.get("calendar_event_id", "")
+    if event_id:
+        try:
+            delete_event(event_id)
+            calendar_note = "\n🗑 Evento eliminado de Google Calendar"
+        except Exception as e:
+            # No bloquear la completación por un fallo del calendario
+            print(f"[TelegramHandler] No se pudo eliminar el evento {event_id}: {e}")
+            calendar_note = "\n⚠️ No se pudo eliminar el evento del calendario"
+
+    send_message(
+        chat_id,
+        f"✅ <b>¡Tarea completada!</b>\n\n"
+        f"📚 {html.escape(task.get('subject', ''))}\n"
+        f"📖 {html.escape(task.get('course', ''))}"
+        f"{calendar_note}",
+    )
 
 
 def _cmd_buscar(chat_id: int, args: str) -> None:
